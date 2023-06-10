@@ -1,3 +1,10 @@
 youtube_tts_data_generator.egg-info/
 build/
 dist/
+venv/
+theprimeagen/
+theprimeagen_prep/
+jREG/
+jREG_prep/
+*links.txt
+*.zip
