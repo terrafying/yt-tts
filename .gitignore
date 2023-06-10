@@ -1,3 +1,5 @@
+.DS_Store
+__pycache__/
 youtube_tts_data_generator.egg-info/
 build/
 dist/
