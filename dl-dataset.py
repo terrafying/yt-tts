@@ -10,7 +10,9 @@ youtuber_name = 'jREG'
 
 channel_id = scrapetube.get_channel_id(youtuber_name)
 
-links = scrapetube.get_video_links(os.environ["YOUTUBE_API_KEY"], channel_id)
+MAX_VIDEOS = 30
+
+links = scrapetube.get_video_links(os.environ["YOUTUBE_API_KEY"], channel_id)[:MAX_VIDEOS]
 
 open(f'{youtuber_name}-links.txt', 'w').write('\n'.join(links))
 # First create a YTSpeechDataGenerator instance:
@@ -28,11 +30,15 @@ generator.prepare_dataset(f'{youtuber_name}-links.txt', sr=44100)
 generator.zip_dataset(f'{youtuber_name}-dataset')
 
 # use S3 to upload the zip file to your S3 bucket
-s3_path = f's3://your-bucket/{youtuber_name}-dataset.zip'
+s3_path = f's3://eva-tts-datasets/'
 
 import boto3
 
 s3 = boto3.client('s3')
-s3.upload_file(s3_path, 'your-bucket', f'{youtuber_name}-dataset.zip')
 
-# generator.finalize_dataset(min_audio_length=3, max_audio_length=30)
+# Upload the zip file to S3
+
+
+s3.upload_file(s3_path, 'eva-tts-datasets', f'{youtuber_name}-dataset.zip')
+
+# # generator.finalize_dataset(min_audio_length=3, max_audio_length=30)

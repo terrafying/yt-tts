@@ -63,8 +63,8 @@ def get_channel_id(channel_name):
 
 
 if __name__ == "__main__":
-    CHANNEL_ID = "UCGGvjs7NQEkWqZYEoIJEG5g"
-
+    # Get channel ID from channel name
+    CHANNEL_ID = get_channel_id("jREG")
     video_links = get_video_links(API_KEY, CHANNEL_ID)
 
     # Print all video links

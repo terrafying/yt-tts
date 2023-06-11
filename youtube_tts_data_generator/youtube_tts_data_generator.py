@@ -3,9 +3,7 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import warnings
-from datetime import datetime
 from pathlib import Path
 
 import librosa
@@ -24,6 +22,7 @@ from youtube_transcript_api.formatters import JSONFormatter
 
 from .audio import preprocess_wav
 from .text_cleaner import Cleaner
+from .wave_trim import trim_wav_with_timestamps
 
 WAV_SUFFIX = ".wav"
 
@@ -321,9 +320,6 @@ class YTSpeechDataGenerator(object):
                 errno.ENOENT, os.strerror(errno.ENOENT), self.filenames_txt
             )
 
-        # load csv file from filenames_txt
-        # files_list = csv.DictReader(open(self.filenames_txt))
-
         files_list = open(self.filenames_txt).read().strip().split("\n")
         files_list = files_list[1:]
         tqdm.write(f"Found {len(files_list)} files to process")
@@ -332,7 +328,7 @@ class YTSpeechDataGenerator(object):
             for line in files_pbar:
                 filename, subtitle, trim_min_begin, trim_min_end = line.split(",")
                 caption_json = None
-                out_filename = filename.rsplit('.')[0] + ".json"
+                json_caption_out_filename = filename.rsplit('.')[0] + f".en.json"
                 files_pbar.set_description("Processing %s" % filename)
                 if subtitle.lower().endswith(".vtt"):
                     tqdm.write(f"Detected VTT captions. Converting to json..")
@@ -360,12 +356,12 @@ class YTSpeechDataGenerator(object):
                 if caption_json:
                     caption_json = self.fix_json_trans(caption_json)
                     open(
-                        os.path.join(self.download_dir, out_filename),
+                        os.path.join(self.download_dir, json_caption_out_filename),
                         "w",
                         encoding="utf-8",
                     ).write(json.dumps(caption_json, indent=2, sort_keys=True))
                     tqdm.write(
-                        f"Writing json captions for {filename} to '{out_filename}'."
+                        f"Writing json captions for {filename} to '{json_caption_out_filename}'."
                     )
                 trim_min_end = int(trim_min_end)
                 trim_min_begin = int(trim_min_begin)
@@ -381,52 +377,20 @@ class YTSpeechDataGenerator(object):
                     captions = caption_json
 
                 trim_min_end = captions[-1]["end"]
-                tqdm.write(f"Trim: {trim_min_end} {trim_min_begin}")
-                tqdm.write(str(captions))
-                for ix, cap in enumerate(captions):
-                    text = cap["text"]
-                    start = cap["start"]
-                    end = cap["end"]
+                # tqdm.write(f"Trim: {trim_min_end} {trim_min_begin}")
+                # tqdm.write(str(captions))
 
-                    # print(f"Processing caption T {start} - {end}\n text={text}")
+                trim_wav_with_timestamps(
+                    os.path.join(self.download_dir, filename),
+                    os.path.join(self.download_dir, json_caption_out_filename),
+                    self.split_dir,
+                    filename_stub)
 
-                    t = datetime.strptime(convert_time(start), "%H:%M:%S").time()
-
-                    if trim_min_end > 0:
-                        t2 = datetime.strptime(
-                            convert_time(end), "%H:%M:%S"
-                        ).time()
-
-                        if (
-                                t.minute >= trim_min_begin
-                                and t2.minute <= trim_min_end
-                                and text != "\n"
-                        ):
-                            tqdm.write("Start ffmpegegeging???")
-                            text = " ".join(text.split("\n"))
-                            new_name = filename_stub + "-" + str(ix + 1)
-
-                            cmd = [
-                                "ffmpeg",
-                                "-i",
-                                f"{os.path.join(self.download_dir, filename_stub)}.wav",
-                                "-ss",
-                                str(start),
-                                "-to",
-                                str(end),
-                                "-c",
-                                "copy",
-                                f"{os.path.join(self.split_dir, new_name)}.wav",
-                            ]
-
-                            call = subprocess.run(cmd, stderr=subprocess.STDOUT)
-
-                            with open(
-                                    os.path.join(self.split_dir, new_name + ".txt"), "w"
-                            ) as f:
-                                f.write(text)
-                        else:
-                            tqdm.write("End??")
+                for ix, caption in enumerate(captions):
+                    with open(
+                            os.path.join(self.split_dir, filename_stub + f"-{ix+1}.txt"), "w"
+                    ) as f:
+                        f.write(caption['text'])
 
             tqdm.write(
                 f"Completed splitting audios and texts to '{self.split_dir}'"
@@ -437,7 +401,7 @@ class YTSpeechDataGenerator(object):
             tqdm.write(f"Verifying split audios and their transcriptions.")
 
             df = []
-            for _ in files_pbar:
+            for line in files_pbar:
                 filename, subtitle, trim_min_begin, trim_min_end = line.split(",")
                 files_pbar.set_description("Processing %s" % filename)
                 fname = filename[:-4]
@@ -470,7 +434,7 @@ class YTSpeechDataGenerator(object):
             df = pd.DataFrame(
                 df, columns=["wav_file_name", "transcription", "length"]
             )
-            print(df.head())
+
             df.to_csv(path_or_buf=Path(self.split_audios_csv), sep="|", index=False)
 
             tqdm.write(
@@ -577,7 +541,7 @@ class YTSpeechDataGenerator(object):
         )
         return int(self.len_dataset)
 
-    def finalize_dataset(self, min_audio_length=1, max_audio_length=60):
+    def finalize_dataset(self, min_audio_length=3, max_audio_length=30):
         """
         Trims silence from audio files
         and creates a metadada file in csv/json format.
@@ -746,5 +710,4 @@ class YTSpeechDataGenerator(object):
         shutil.make_archive(zip_file, "zip", self.dest_dir)
 
         tqdm.write(f"Dataset '{self.name}' has been zipped as '{zip_file}.zip'.")
-        # Move the zip file to the dataset directory
-        shutil.move(f"{zip_file}.zip", dataset_dir)
+
