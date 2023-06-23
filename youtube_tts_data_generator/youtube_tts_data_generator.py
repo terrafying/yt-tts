@@ -406,8 +406,8 @@ class YTSpeechDataGenerator(object):
                 files_pbar.set_description("Processing %s" % filename)
                 fname = filename[:-4]
                 files = os.listdir(self.split_dir)
-                print(files)
-                for ix in range(len(files)):
+                wav_files = [f for f in files if f.endswith(WAV_SUFFIX)]
+                for ix in range(len(wav_files)):
                     current_file = fname + '-' + str(ix) + ".txt"
                     current_wav = fname + '-' + str(ix) + WAV_SUFFIX
                     try:
@@ -608,19 +608,21 @@ class YTSpeechDataGenerator(object):
         for wav, trans in zip(filtered_audios, filtered_txts):
             with open(os.path.join(self.concat_dir, trans)) as f:
                 text = f.read().strip()
-            trimmed.append([wav, text])
+            trimmed.append([wav, text, text.lower()])
 
-        trimmed = pd.DataFrame(trimmed, columns=["wav_file_name", "transcription"])
+        trimmed = pd.DataFrame(trimmed, columns=["wav_file_name", "transcription", "transcription_normalized"])
 
         if not self.keep_audio_extension:
             trimmed["wav_file_name"] = trimmed["wav_file_name"].apply(
                 lambda x: x.replace(WAV_SUFFIX, "")
             )
+        trimmed['wav_file_name'] = trimmed['wav_file_name'].apply(lambda x: f'wavs/{x}')
 
         if self.output_type == "csv":
             trimmed["transcription"] = trimmed["transcription"].apply(
                 lambda x: self.cleaner.clean_english_text(x)
             )
+
             trimmed.to_csv(
                 os.path.join(self.dest_dir, "metadata.csv"),
                 sep="|",
@@ -667,7 +669,7 @@ class YTSpeechDataGenerator(object):
             download_youtube_data=True,
             max_concat_limit=30,
             concat_count=2,
-            min_audio_length=1,
+            min_audio_length=3,
             max_audio_length=30,
     ):
         """
